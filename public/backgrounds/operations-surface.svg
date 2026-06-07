@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-label="Operations-style prototype background">
+  <rect width="1600" height="1000" fill="#f6f7f4"/>
+  <g stroke="#171717" stroke-opacity=".08" stroke-width="1">
+    <path d="M0 80H1600M0 160H1600M0 240H1600M0 320H1600M0 400H1600M0 480H1600M0 560H1600M0 640H1600M0 720H1600M0 800H1600M0 880H1600"/>
+    <path d="M80 0V1000M160 0V1000M240 0V1000M320 0V1000M400 0V1000M480 0V1000M560 0V1000M640 0V1000M720 0V1000M800 0V1000M880 0V1000M960 0V1000M1040 0V1000M1120 0V1000M1200 0V1000M1280 0V1000M1360 0V1000M1440 0V1000M1520 0V1000"/>
+  </g>
+  <g fill="none" stroke="#171717" stroke-opacity=".28" stroke-width="2">
+    <rect x="120" y="110" width="440" height="250"/>
+    <rect x="610" y="110" width="380" height="250"/>
+    <rect x="1040" y="110" width="440" height="250"/>
+    <rect x="120" y="420" width="620" height="350"/>
+    <rect x="790" y="420" width="690" height="350"/>
+  </g>
+  <g fill="#151515" fill-opacity=".62" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">
+    <text x="150" y="155">INCIDENT QUEUE</text>
+    <text x="640" y="155">ASSET WATCH</text>
+    <text x="1070" y="155">SIGNAL MAP</text>
+    <text x="150" y="465">LIVE EVENT STREAM</text>
+    <text x="820" y="465">RESPONSE RUNBOOK</text>
+  </g>
+  <g fill="#171717" fill-opacity=".12">
+    <rect x="150" y="190" width="360" height="18"/>
+    <rect x="150" y="230" width="290" height="18"/>
+    <rect x="150" y="270" width="410" height="18"/>
+    <rect x="640" y="190" width="240" height="18"/>
+    <rect x="640" y="230" width="300" height="18"/>
+    <rect x="640" y="270" width="210" height="18"/>
+  </g>
+  <g fill="none" stroke="#2d6cff" stroke-opacity=".65" stroke-width="3">
+    <path d="M1100 270C1160 180 1270 165 1350 250S1440 286 1490 220"/>
+    <path d="M820 710C900 610 1010 590 1090 660S1210 745 1340 600"/>
+  </g>
+  <g fill="#151515" fill-opacity=".16">
+    <rect x="150" y="510" width="520" height="12"/>
+    <rect x="150" y="548" width="480" height="12"/>
+    <rect x="150" y="586" width="560" height="12"/>
+    <rect x="150" y="624" width="430" height="12"/>
+    <rect x="820" y="510" width="580" height="12"/>
+    <rect x="820" y="548" width="520" height="12"/>
+    <rect x="820" y="586" width="610" height="12"/>
+  </g>
+</svg>
+

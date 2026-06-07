@@ -1,0 +1,27 @@
+{
+  "name": "aegis-command-palette-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@central-icons-react/square-outlined-radius-0-stroke-1": "^1.1.257",
+    "@fontsource/geist-mono": "^5.2.8",
+    "@fontsource/geist-sans": "^5.2.5",
+    "@fontsource/inter": "^5.2.8",
+    "dialkit": "^1.2.0",
+    "interface-kit": "^0.1.3",
+    "motion": "^12.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "agentation": "^3.0.2",
+    "vite": "^7.0.0"
+  }
+}
