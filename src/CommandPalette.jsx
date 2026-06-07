@@ -425,8 +425,11 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
 
     if (event.key === 'Escape') {
       event.preventDefault()
-      resetToDefaultTab()
-      onOpenChange(false)
+      if (activeTab === DEFAULT_TAB && !activeSubTab) {
+        onOpenChange(false)
+      } else {
+        resetToDefaultTab()
+      }
       return
     }
 
