@@ -37,6 +37,7 @@ const DEFAULT_TAB = 'All'
 const DEFAULT_LOADING_QUERY_KEY = 'resting'
 const SUB_TAB_EXIT_DELAY = 190
 const PLAIN_SHORTCUT_DELAY = 300
+const ALT_HINT_DELAY = 1000
 
 function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motionEnabled, onOpenChange }) {
   const [query, setQuery] = useState('')
@@ -51,6 +52,7 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
   const [assignmentOverrides, setAssignmentOverrides] = useState({})
   const [assignmentViewIncidentId, setAssignmentViewIncidentId] = useState(null)
   const [assignmentSelectedId, setAssignmentSelectedId] = useState(null)
+  const [altHintsVisible, setAltHintsVisible] = useState(false)
   const activeActionsRef = useRef([])
   const copiedActionIdRef = useRef(null)
   const inputRef = useRef(null)
@@ -59,6 +61,7 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
   const loadingDelayTimerRef = useRef(null)
   const loadingTimerRef = useRef(null)
   const pendingPlainShortcutRef = useRef(null)
+  const altHintTimerRef = useRef(null)
   const suppressSelectionResetRef = useRef(false)
   const suppressNextInputRef = useRef(false)
   const shouldReduceMotion = useReducedMotion()
@@ -226,6 +229,8 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
       setExitingSubTabPanel(null)
       setAssignmentViewIncidentId(null)
       setAssignmentSelectedId(null)
+      clearAltHintTimer()
+      setAltHintsVisible(false)
       return
     }
 
@@ -238,6 +243,8 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
     setExitingSubTabPanel(null)
     setAssignmentViewIncidentId(null)
     setAssignmentSelectedId(null)
+    clearAltHintTimer()
+    setAltHintsVisible(false)
 
     const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 40)
     return () => window.clearTimeout(focusTimer)
@@ -250,8 +257,51 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
       }
 
       clearPendingPlainShortcut()
+      clearAltHintTimer()
     }
   }, [])
+
+  useEffect(() => {
+    if (!open) {
+      return undefined
+    }
+
+    function handleDocumentKeyDown(event) {
+      if (event.key !== 'Alt' || event.repeat) {
+        return
+      }
+
+      clearAltHintTimer()
+      altHintTimerRef.current = window.setTimeout(() => {
+        setAltHintsVisible(true)
+        altHintTimerRef.current = null
+      }, ALT_HINT_DELAY)
+    }
+
+    function handleDocumentKeyUp(event) {
+      if (event.key !== 'Alt') {
+        return
+      }
+
+      clearAltHintTimer()
+      setAltHintsVisible(false)
+    }
+
+    function handleWindowBlur() {
+      clearAltHintTimer()
+      setAltHintsVisible(false)
+    }
+
+    document.addEventListener('keydown', handleDocumentKeyDown, true)
+    document.addEventListener('keyup', handleDocumentKeyUp, true)
+    window.addEventListener('blur', handleWindowBlur)
+
+    return () => {
+      document.removeEventListener('keydown', handleDocumentKeyDown, true)
+      document.removeEventListener('keyup', handleDocumentKeyUp, true)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [open])
 
   useEffect(() => {
     if (loadingDelayTimerRef.current) {
@@ -480,6 +530,13 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
     pendingPlainShortcutRef.current = null
   }
 
+  function clearAltHintTimer() {
+    if (altHintTimerRef.current) {
+      window.clearTimeout(altHintTimerRef.current)
+      altHintTimerRef.current = null
+    }
+  }
+
   function commitPendingShortcutToSearch(nextKey = '') {
     const pendingShortcut = pendingPlainShortcutRef.current
 
@@ -632,6 +689,38 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
     setActiveSubTab(nextOption.subTab || null)
   }
 
+  function moveParentTabSelection(direction) {
+    const activeIndex = COMMAND_TABS.findIndex((tab) => tab === activeTab)
+    const nextIndex = (
+      activeIndex + direction + COMMAND_TABS.length
+    ) % COMMAND_TABS.length
+    const nextTab = COMMAND_TABS[nextIndex]
+
+    setSelectionMode('keyboard')
+    queueSubTabExit(nextTab)
+    setActiveTab(nextTab)
+    setActiveSubTab(null)
+  }
+
+  function selectVisibleItemByShortcut(index) {
+    const shortcutItems = isAssignmentView ? assignmentVisibleMembers : visibleItems
+    const item = shortcutItems[index]
+
+    if (!item) {
+      return false
+    }
+
+    setSelectionMode('keyboard')
+
+    if (isAssignmentView) {
+      setAssignmentSelectedId(item.id)
+    } else {
+      setSelectedId(item.id)
+    }
+
+    return true
+  }
+
   function handleKeyDown(event) {
     const isSearchTextEntry = event.target === inputRef.current && isPrintableKey(event)
     const plainShortcutAction = getPlainShortcutAction(event, activeActions)
@@ -708,14 +797,14 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
 
       const tabIndex = getAltShortcutIndex(event)
 
-      if (tabIndex >= 0 && tabIndex < COMMAND_TABS.length) {
+      if (tabIndex >= 0) {
         event.preventDefault()
         event.stopPropagation()
         suppressNextInputRef.current = true
         window.setTimeout(() => {
           suppressNextInputRef.current = false
         }, 0)
-        handleTabChange(COMMAND_TABS[tabIndex])
+        selectVisibleItemByShortcut(tabIndex)
         return
       }
     }
@@ -779,6 +868,11 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
     if (event.key === 'ArrowRight') {
       event.preventDefault()
       clearPendingPlainShortcut()
+      if (event.altKey) {
+        moveParentTabSelection(1)
+        return
+      }
+
       moveTabSelection(1)
       return
     }
@@ -786,6 +880,11 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
     if (event.key === 'ArrowLeft') {
       event.preventDefault()
       clearPendingPlainShortcut()
+      if (event.altKey) {
+        moveParentTabSelection(-1)
+        return
+      }
+
       moveTabSelection(-1)
       return
     }
@@ -869,6 +968,7 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
                 incident={assignmentIncident}
                 memberSections={assignmentMemberSections}
                 motionEnabled={shouldAnimate}
+                shortcutHintsVisible={altHintsVisible}
                 selectedId={assignmentSelectedId}
                 onAssign={assignSelectedMember}
                 onSelect={setAssignmentSelectedId}
@@ -903,6 +1003,7 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
               >
                 <CommandResultsContent
                   motionEnabled={shouldAnimate}
+                  shortcutHintsVisible={altHintsVisible}
                   selectedId={selectedId}
                   holdEmptyState={shouldHoldEmptyState}
                   searchLoading={shouldShowSearchLoading}
@@ -921,6 +1022,7 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
                 <div className="command-results-body" ref={resultsBodyRef}>
                   <CommandResultsContent
                     motionEnabled={false}
+                    shortcutHintsVisible={altHintsVisible}
                     selectedId={selectedId}
                     holdEmptyState={shouldHoldEmptyState}
                     searchLoading={shouldShowSearchLoading}
@@ -984,6 +1086,7 @@ function CommandResultsContent({
   loadingMotionEnabled,
   motionEnabled,
   searchLoading,
+  shortcutHintsVisible,
   selectedId,
   visibleItems,
   visibleSections,
@@ -1024,6 +1127,7 @@ function CommandResultsContent({
         motionEnabled={motionEnabled}
         sections={visibleSections}
         selectedId={selectedId}
+        shortcutHintsVisible={shortcutHintsVisible}
         onSelect={onSelect}
       />
     </>
@@ -1146,7 +1250,7 @@ function CommandTabs({
 }) {
   return (
     <div className="command-tabs" aria-label="Result filters">
-      {COMMAND_TABS.map((tab, index) => {
+      {COMMAND_TABS.map((tab) => {
         const subTabs = COMMAND_SUB_TABS[tab] || []
         const hasSubTabs = subTabs.length > 0
         const hasVisibleSubTabs = tab === activeTab && subTabs.length > 0
@@ -1161,7 +1265,6 @@ function CommandTabs({
                 data-active={tab === activeTab}
                 data-filtering={tab === activeTab && Boolean(activeSubTab)}
                 aria-pressed={tab === activeTab}
-                title={`Alt+${index + 1}`}
                 onClick={() => onTabChange(tab)}
               >
                 {tab}
@@ -1186,7 +1289,6 @@ function CommandTabs({
             type="button"
             data-active={tab === activeTab}
             aria-pressed={tab === activeTab}
-            title={`Alt+${index + 1}`}
             onClick={() => onTabChange(tab)}
           >
             {tab}
@@ -1312,21 +1414,28 @@ function SmartbarBadge({ item }) {
   )
 }
 
-function CommandSections({ motionEnabled, sections, selectedId, onSelect }) {
+function CommandSections({ motionEnabled, sections, selectedId, shortcutHintsVisible, onSelect }) {
+  let shortcutIndex = 0
+
   return sections.map((section) => (
     <section className="command-section" key={section.id}>
       <div className="command-section-heading">
         <span>{section.label}</span>
       </div>
-      {section.items.map((item) => (
-        <CommandRow
-          key={item.id}
-          item={item}
-          motionEnabled={motionEnabled}
-          selected={item.id === selectedId}
-          onSelect={() => onSelect(item.id)}
-        />
-      ))}
+      {section.items.map((item) => {
+        shortcutIndex += 1
+
+        return (
+          <CommandRow
+            key={item.id}
+            item={item}
+            motionEnabled={motionEnabled}
+            selected={item.id === selectedId}
+            shortcutHint={shortcutHintsVisible && shortcutIndex <= 9 ? shortcutIndex : null}
+            onSelect={() => onSelect(item.id)}
+          />
+        )
+      })}
     </section>
   ))
 }
@@ -1335,10 +1444,13 @@ function CommandAssignmentView({
   incident,
   memberSections,
   motionEnabled,
+  shortcutHintsVisible,
   selectedId,
   onAssign,
   onSelect,
 }) {
+  let shortcutIndex = 0
+
   return (
     <>
       <section className="command-section command-assignment-incident">
@@ -1361,16 +1473,21 @@ function CommandAssignmentView({
         ) : (
           memberSections.map((section) => (
             <React.Fragment key={section.id}>
-              {section.items.map((item) => (
-                <CommandRow
-                  key={item.id}
-                  item={item}
-                  motionEnabled={motionEnabled}
-                  selected={item.id === selectedId}
-                  onSelect={() => onSelect(item.id)}
-                  onClick={() => onAssign(item)}
-                />
-              ))}
+              {section.items.map((item) => {
+                shortcutIndex += 1
+
+                return (
+                  <CommandRow
+                    key={item.id}
+                    item={item}
+                    motionEnabled={motionEnabled}
+                    selected={item.id === selectedId}
+                    shortcutHint={shortcutHintsVisible && shortcutIndex <= 9 ? shortcutIndex : null}
+                    onSelect={() => onSelect(item.id)}
+                    onClick={() => onAssign(item)}
+                  />
+                )
+              })}
             </React.Fragment>
           ))
         )}
@@ -1379,11 +1496,15 @@ function CommandAssignmentView({
   )
 }
 
-function CommandRow({ item, motionEnabled, selected, onClick, onSelect }) {
+function CommandRow({ item, motionEnabled, selected, shortcutHint, onClick, onSelect }) {
   const isIncident = item.kind === 'incident'
   const isMember = item.kind === 'member'
   const isAsset = item.kind === 'asset'
   const isLog = item.kind === 'log'
+  const memberState = isMember && item.meta === 'On-call' ? 'on-call' : 'default'
+  const shouldShowMeta = item.meta && !isIncident && !isLog && !(
+    isMember && (item.meta === 'On-call' || item.meta === 'Off-call')
+  )
 
   return (
     <button
@@ -1400,7 +1521,7 @@ function CommandRow({ item, motionEnabled, selected, onClick, onSelect }) {
     >
       <span className="command-row-main">
         {isMember ? (
-          <AvatarBadge initials={item.avatar} />
+          <AvatarBadge initials={item.avatar} state={memberState} />
         ) : (
           <span className="command-row-icon-frame">
             <CommandIcon name={item.icon} />
@@ -1414,7 +1535,7 @@ function CommandRow({ item, motionEnabled, selected, onClick, onSelect }) {
               state={item.incidentState}
             />
           )}
-          {item.meta && !isIncident && !isLog && (
+          {shouldShowMeta && (
             <span
               className="command-meta"
               data-state={item.meta.toLowerCase().replace(/\s+/g, '-')}
@@ -1448,6 +1569,11 @@ function CommandRow({ item, motionEnabled, selected, onClick, onSelect }) {
       {isLog && item.meta && (
         <span className="command-row-accessory command-log-timestamp">
           {item.meta}
+        </span>
+      )}
+      {shortcutHint && (
+        <span className="command-row-shortcut" aria-hidden="true">
+          {shortcutHint}
         </span>
       )}
     </button>
@@ -1500,23 +1626,34 @@ function CommandActionBar({ actions, copiedActionId, motionEnabled, onAction }) 
   return (
     <div className="command-action-bar" aria-label="Available actions">
       <div className="command-actions" data-motion={motionEnabled}>
-        {actions.map((action, index) => (
-          <ActionGroup
-            action={action}
-            copied={action.id === copiedActionId}
-            onAction={onAction}
-            key={`${index}-${getActionKey(action, action.id === copiedActionId)}`}
-          >
-            <span className="command-action-label">
-              {action.id === copiedActionId ? 'Copied' : action.label}
-            </span>
-            {action.keys.map((key) => (
-              <kbd className="command-key" key={key}>
-                {formatKey(key)}
-              </kbd>
-            ))}
-          </ActionGroup>
-        ))}
+        {actions.length > 0 ? (
+          actions.map((action, index) => (
+            <ActionGroup
+              action={action}
+              copied={action.id === copiedActionId}
+              onAction={onAction}
+              key={`${index}-${getActionKey(action, action.id === copiedActionId)}`}
+            >
+              <span className="command-action-label">
+                {action.id === copiedActionId ? 'Copied' : action.label}
+              </span>
+              {action.keys.map((key) => (
+                <kbd className="command-key" key={key}>
+                  {formatKey(key)}
+                </kbd>
+              ))}
+            </ActionGroup>
+          ))
+        ) : (
+          <div className="command-action-empty" aria-hidden="true">
+            <span>switch tabs</span>
+            <kbd className="command-key">←</kbd>
+            <kbd className="command-key">→</kbd>
+            <span>move</span>
+            <kbd className="command-key">↑</kbd>
+            <kbd className="command-key">↓</kbd>
+          </div>
+        )}
       </div>
     </div>
   )

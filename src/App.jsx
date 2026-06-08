@@ -50,6 +50,7 @@ const DEFAULT_PROTOTYPE_CONTROLS = {
   paletteWidth: '560px',
   selectionTone: 'mono',
   shadowEnabled: false,
+  borderTone: 'grey',
   textScale: 'minus',
 }
 
@@ -67,6 +68,7 @@ const POLISHED_PROTOTYPE_CONTROLS = {
   paletteWidth: '560px',
   selectionTone: 'mono',
   shadowEnabled: true,
+  borderTone: 'grey',
   textScale: 'plus',
 }
 
@@ -84,6 +86,7 @@ const COMPACT_PROTOTYPE_CONTROLS = {
   paletteWidth: '560px',
   selectionTone: 'blue',
   shadowEnabled: false,
+  borderTone: 'black',
   textScale: 'minus',
 }
 
@@ -122,6 +125,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [motionEnabled, setMotionEnabled] = useState(false)
   const [shadowEnabled, setShadowEnabled] = useState(false)
+  const [borderTone, setBorderTone] = useState('grey')
   const [dotsMode, setDotsMode] = useState('headings')
   const [fontSmoothingEnabled, setFontSmoothingEnabled] = useState(true)
   const [iconSize, setIconSize] = useState('14px')
@@ -134,7 +138,7 @@ function App() {
   const [selectionTone, setSelectionTone] = useState('mono')
   const [textScale, setTextScale] = useState('minus')
   const [infoVisibility, setInfoVisibility] = useState('hover')
-  const [devToolsVisible, setDevToolsVisible] = useState(true)
+  const [devToolsVisible, setDevToolsVisible] = useState(false)
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [isApplyingPreset, setIsApplyingPreset] = useState(false)
   const [activePresetId, setActivePresetId] = useState(1)
@@ -177,6 +181,7 @@ function App() {
       paletteWidth,
       selectionTone,
       shadowEnabled,
+      borderTone,
       textScale,
     }),
     [
@@ -193,6 +198,7 @@ function App() {
       paletteWidth,
       selectionTone,
       shadowEnabled,
+      borderTone,
       textScale,
     ],
   )
@@ -233,6 +239,7 @@ function App() {
     setPaletteWidth(preset.controls.paletteWidth)
     setSelectionTone(preset.controls.selectionTone)
     setShadowEnabled(preset.controls.shadowEnabled)
+    setBorderTone(preset.controls.borderTone ?? 'grey')
     setTextScale(preset.controls.textScale)
     setActivePresetId(preset.id)
 
@@ -279,8 +286,8 @@ function App() {
         '--command-row-padding-y': itemPadding === 'double-minus' ? '2px' : itemPadding === 'plus' ? '6px' : itemPadding === 'double-plus' ? '8px' : '4px',
         '--command-heading-padding-x': itemPadding === 'double-minus' ? '6px' : itemPadding === 'plus' ? '10px' : itemPadding === 'double-plus' ? '12px' : '8px',
         '--command-heading-padding-y': itemPadding === 'double-minus' ? '2px' : itemPadding === 'plus' ? '6px' : itemPadding === 'double-plus' ? '8px' : '4px',
-        '--command-dot-color': '#D4D4D4',
-        '--command-heading-dot-color': '#E5E5E5',
+        '--command-dot-color': borderTone === 'black' ? '#000000' : '#D4D4D4',
+        '--command-heading-dot-color': borderTone === 'black' ? '#000000' : '#E5E5E5',
         '--command-heading-dot-size': `${headingDots.size}px`,
         '--command-heading-dot-spacing': `${headingDots.spacing}px`,
         '--command-heading-dot-area-height': `${headingDots.rows * headingDots.spacing}px`,
@@ -295,6 +302,7 @@ function App() {
         '--command-palette-shadow': shadowEnabled
           ? '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
           : 'none',
+        '--command-palette-border': borderTone === 'black' ? '#000000' : '#d4d4d4',
         '--command-palette-width': paletteWidth,
         '--command-palette-height': `${paletteLayout.height}px`,
         '--command-selection-fill': selectionTone === 'green' ? '#F0FDF4' : selectionTone === 'blue' ? '#EDF3FD' : '#f5f5f5',
@@ -359,6 +367,7 @@ function App() {
           paletteWidth={paletteWidth}
           selectionTone={selectionTone}
           shadowEnabled={shadowEnabled}
+          borderTone={borderTone}
           textScale={textScale}
           onIconSizeChange={setIconSize}
           onIconStrokeChange={setIconStroke}
@@ -373,6 +382,7 @@ function App() {
           onPaletteWidthChange={setPaletteWidth}
           onSelectionToneChange={setSelectionTone}
           onShadowChange={setShadowEnabled}
+          onBorderToneChange={setBorderTone}
           onTextScaleChange={setTextScale}
         />
       )}
@@ -493,6 +503,7 @@ function SettingsPane({
   paletteWidth,
   selectionTone,
   shadowEnabled,
+  borderTone,
   textScale,
   onIconSizeChange,
   onIconStrokeChange,
@@ -507,6 +518,7 @@ function SettingsPane({
   onPaletteWidthChange,
   onSelectionToneChange,
   onShadowChange,
+  onBorderToneChange,
   onTextScaleChange,
 }) {
   return (
@@ -550,6 +562,27 @@ function SettingsPane({
             onClick={() => onShadowChange(true)}
           >
             On
+          </button>
+        </div>
+      </div>
+      <div className="settings-row">
+        <span className="settings-label">Border</span>
+        <div className="settings-toggle" role="group" aria-label="Palette border">
+          <button
+            type="button"
+            className="settings-option"
+            data-active={borderTone === 'grey'}
+            onClick={() => onBorderToneChange('grey')}
+          >
+            Grey
+          </button>
+          <button
+            type="button"
+            className="settings-option"
+            data-active={borderTone === 'black'}
+            onClick={() => onBorderToneChange('black')}
+          >
+            Black
           </button>
         </div>
       </div>
