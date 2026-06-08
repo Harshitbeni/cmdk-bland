@@ -27,7 +27,7 @@ export const SMARTBAR_ITEMS = [
     subTab: 'Ongoing',
     eyebrow: 'Incidents',
     title: '3 ongoing incidents',
-    detail: 'Critical Okta, AWS, and endpoint investigations active',
+    detail: 'High Okta, AWS, and endpoint investigations active',
     icon: 'exclamation-triangle',
     tone: 'alert',
     actions: [
@@ -60,12 +60,43 @@ const memberRows = [
   member('contact-mandiant', 'Mandiant retainer lead', 'ML', 'lead@mandiant.example', 'External', 'Vendor', ['forensics', 'retainer', 'vendor']),
 ]
 
-const ownerStateByAvatar = Object.fromEntries(
+export const OWNER_STATE_BY_AVATAR = Object.fromEntries(
   memberRows.map((item) => [item.avatar, item.meta === 'On-call' ? 'on-call' : 'default']),
 )
 
+export const OWNER_NAME_BY_AVATAR = Object.fromEntries(
+  memberRows.map((item) => [item.avatar, item.label]),
+)
+
+export const ASSIGNABLE_MEMBER_SECTIONS = [
+  {
+    id: 'assign-on-call',
+    label: 'On-call',
+    items: memberRows.filter((item) => item.meta === 'On-call'),
+  },
+  {
+    id: 'assign-team-members',
+    label: 'Team members',
+    items: memberRows.filter((item) => item.subTab === 'Internal' && item.meta !== 'On-call'),
+  },
+]
+
+const incidentAssigneeById = {
+  'incident-okta-token-theft': 'AC',
+  'incident-aws-iam-spike': 'PG',
+  'incident-endpoint-beacon': 'SV',
+  'incident-db-exfil': 'KM',
+  'incident-slack-phish': 'JM',
+  'incident-github-pat': 'NS',
+  'incident-edr-disabled': 'AB',
+  'incident-s3-policy': 'IN',
+  'incident-malware-doc': 'MP',
+  'incident-impossible-travel': 'AC',
+  'incident-cloudtrail-gap': 'PG',
+}
+
 const incidentRows = [
-  incident('incident-okta-token-theft', 'Okta token replay from unmanaged device', 'Ongoing - Critical', 'Identity / Alexander', '2026-06-06T20:42:00Z', ['okta', 'token', 'identity', 'critical', 'unmanaged device']),
+  incident('incident-okta-token-theft', 'Okta token replay from unmanaged device', 'Ongoing - High', 'Identity / Alexander', '2026-06-06T20:42:00Z', ['okta', 'token', 'identity', 'high', 'unmanaged device']),
   incident('incident-aws-iam-spike', 'AWS IAM privilege escalation spike', 'Ongoing - High', 'Cloud / Pari', '2026-06-06T19:18:00Z', ['aws', 'iam', 'privilege escalation', 'cloud', 'high']),
   incident('incident-endpoint-beacon', 'Suspicious endpoint beacon on SOC-floor-macbook-07', 'Ongoing - Medium', 'Endpoint / Spencer', '2026-06-06T18:03:00Z', ['endpoint', 'beacon', 'macbook', 'edr', 'medium']),
   incident('incident-db-exfil', 'Database export volume anomaly', 'Resolved - High', 'Data / Kai', '2026-06-06T15:12:00Z', ['database', 'export', 'exfiltration', 'postgres', 'high']),
@@ -83,20 +114,20 @@ const incidentRows = [
 
 const assetRows = [
   asset('open-workstation', "Harshit's workstation", 'Devices', 'Personal device', 'laptop', 'HB', ['harshit', 'workstation', 'personal', 'laptop', 'device'], true),
-  asset('open-admin-ipad', 'exec-admin-ipad-02', 'Devices', 'Managed iPad', 'laptop', 'AC', ['ipad', 'executive', 'managed', 'device']),
-  asset('open-yubikey-fleet', 'yubikey-fleet-policy', 'Devices', 'Hardware keys', 'tasks', 'NS', ['yubikey', 'mfa', 'hardware key']),
+  asset('open-admin-ipad', 'exec-admin-ipad-02', 'Devices', 'Managed iPad', 'phoneDynamicIsland', 'AC', ['ipad', 'executive', 'managed', 'device']),
+  asset('open-yubikey-fleet', 'yubikey-fleet-policy', 'Devices', 'Hardware keys', 'key', 'NS', ['yubikey', 'mfa', 'hardware key']),
   asset('open-database', 'database-name', 'Servers', 'Postgres primary', 'server', 'HB', ['database', 'server', 'asset', 'data']),
   asset('open-auth-bastion', 'auth-bastion-use1-03', 'Servers', 'Linux bastion', 'server', 'TW', ['bastion', 'ssh', 'linux', 'server'], true),
   asset('open-payroll-api', 'payroll-api-prod-01', 'Servers', 'Production API', 'server', 'AB', ['payroll', 'api', 'server', 'prod']),
   asset('open-siem-indexer', 'siem-indexer-hot-12', 'Servers', 'Log indexer', 'server', 'OR', ['siem', 'logs', 'indexer', 'server']),
-  asset('open-cloud-trail', 'aws-cloudtrail-prod', 'Cloud', 'AWS', 'server', 'PG', ['aws', 'cloudtrail', 'prod', 'cloud']),
-  asset('open-s3-finance', 's3-finance-reports-prod', 'Cloud', 'AWS S3', 'server', 'IN', ['s3', 'finance', 'reports', 'aws', 'cloud'], true),
-  asset('open-gcp-billing', 'gcp-billing-export', 'Cloud', 'GCP', 'server', 'IN', ['gcp', 'billing', 'cloud']),
-  asset('open-azure-id', 'azure-id-sync-prod', 'Cloud', 'Azure AD', 'server', 'AC', ['azure', 'identity', 'cloud']),
-  asset('open-endpoint-macbook', 'SOC-floor-macbook-07', 'Endpoints', 'Endpoint', 'laptop', 'SV', ['soc', 'floor', 'macbook', 'endpoint']),
-  asset('open-finance-laptop', 'finance-laptop-31', 'Endpoints', 'Windows endpoint', 'laptop', 'AB', ['finance', 'windows', 'endpoint'], true),
-  asset('open-build-runner', 'build-runner-macos-14', 'Endpoints', 'CI runner', 'laptop', 'DP', ['build', 'runner', 'macos', 'endpoint']),
-  asset('open-vip-laptop', 'vip-laptop-05', 'Endpoints', 'Executive endpoint', 'laptop', 'JM', ['vip', 'executive', 'endpoint']),
+  asset('open-cloud-trail', 'aws-cloudtrail-prod', 'Cloud', 'AWS', 'cloud', 'PG', ['aws', 'cloudtrail', 'prod', 'cloud']),
+  asset('open-s3-finance', 's3-finance-reports-prod', 'Cloud', 'AWS S3', 'cloud', 'IN', ['s3', 'finance', 'reports', 'aws', 'cloud'], true),
+  asset('open-gcp-billing', 'gcp-billing-export', 'Cloud', 'GCP', 'cloud', 'IN', ['gcp', 'billing', 'cloud']),
+  asset('open-azure-id', 'azure-id-sync-prod', 'Cloud', 'Azure AD', 'cloud', 'AC', ['azure', 'identity', 'cloud']),
+  asset('open-endpoint-macbook', 'SOC-floor-macbook-07', 'Endpoints', 'Endpoint', 'plugin', 'SV', ['soc', 'floor', 'macbook', 'endpoint']),
+  asset('open-finance-laptop', 'finance-laptop-31', 'Endpoints', 'Windows endpoint', 'plugin', 'AB', ['finance', 'windows', 'endpoint'], true),
+  asset('open-build-runner', 'build-runner-macos-14', 'Endpoints', 'CI runner', 'plugin', 'DP', ['build', 'runner', 'macos', 'endpoint']),
+  asset('open-vip-laptop', 'vip-laptop-05', 'Endpoints', 'Executive endpoint', 'plugin', 'JM', ['vip', 'executive', 'endpoint']),
 ]
 
 const logRows = [
@@ -270,32 +301,52 @@ function member(id, label, avatar, email, subTab, meta, extraKeywords = []) {
 
 function incident(id, label, meta, owner, occurredAt, extraKeywords = []) {
   const incidentState = meta.toLowerCase().startsWith('ongoing') ? 'ongoing' : 'resolved'
+  const incidentSeverity = getIncidentSeverity(meta)
+  const assigneeAvatar = incidentAssigneeById[id] || null
 
   return {
     id,
     tab: 'Incidents',
     label,
     meta,
-    icon: 'tasks',
+    icon: 'exclamationCircle',
     kind: 'incident',
     owner,
     occurredAt,
+    assigneeAvatar,
+    assigneeState: assigneeAvatar ? OWNER_STATE_BY_AVATAR[assigneeAvatar] : null,
     incidentState,
+    incidentSeverity,
     keywords: [
       label,
       meta,
       owner,
       incidentState,
+      incidentSeverity,
       'incident',
       'case',
       ...extraKeywords,
     ].map((keyword) => keyword.toLowerCase()),
     actions: [
       { id: 'copy-name', label: 'Copy name', keys: ['Alt', 'C'], copyValue: label },
-      { id: 'assign', label: 'Assign', keys: ['A'] },
+      { id: 'assign', label: assigneeAvatar ? 'Reassign' : 'Assign', keys: ['A'] },
       { id: 'view', label: 'View', keys: ['Enter'], primary: true },
     ],
   }
+}
+
+function getIncidentSeverity(meta) {
+  const normalizedMeta = meta.toLowerCase()
+
+  if (normalizedMeta.includes('low')) {
+    return 'low'
+  }
+
+  if (normalizedMeta.includes('medium')) {
+    return 'medium'
+  }
+
+  return 'high'
 }
 
 function asset(id, label, subTab, meta, icon, ownerAvatar, extraKeywords = [], hasAlert = false) {
@@ -308,7 +359,8 @@ function asset(id, label, subTab, meta, icon, ownerAvatar, extraKeywords = [], h
     icon,
     kind: 'asset',
     ownerAvatar,
-    ownerState: ownerStateByAvatar[ownerAvatar],
+    ownerState: OWNER_STATE_BY_AVATAR[ownerAvatar],
+    ownerName: OWNER_NAME_BY_AVATAR[ownerAvatar],
     hasAlert,
     keywords: [
       label,

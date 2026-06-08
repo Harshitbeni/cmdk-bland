@@ -1,16 +1,25 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useDialKit } from 'dialkit'
+import { IconCloud } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconCloud'
+import { IconExclamationCircle } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconExclamationCircle'
+import { IconKey1 } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconKey1'
 import { IconMacbook } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconMacbook'
 import { IconNewspaper2 } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconNewspaper2'
 import { IconPeople } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconPeople'
+import { IconPhoneDynamicIsland } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconPhoneDynamicIsland'
+import { IconPlugin1 } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconPlugin1'
 import { IconServer } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconServer'
 import { IconTasks } from '@central-icons-react/square-outlined-radius-0-stroke-1/IconTasks'
 import {
   ALL_COMMAND_SECTIONS,
+  ASSIGNABLE_MEMBER_SECTIONS,
+  COMMAND_ITEMS,
   COMMAND_SECTIONS,
   COMMAND_SUB_TABS,
   COMMAND_TABS,
+  OWNER_NAME_BY_AVATAR,
+  OWNER_STATE_BY_AVATAR,
   SMARTBAR_ITEMS,
 } from './commandData'
 
@@ -27,8 +36,9 @@ const COPIED_RESET_DELAY = 1100
 const DEFAULT_TAB = 'All'
 const DEFAULT_LOADING_QUERY_KEY = 'resting'
 const SUB_TAB_EXIT_DELAY = 190
+const PLAIN_SHORTCUT_DELAY = 300
 
-function CommandPalette({ open, motionEnabled, onOpenChange }) {
+function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motionEnabled, onOpenChange }) {
   const [query, setQuery] = useState('')
   const [hasSearchLoadingCompleted, setHasSearchLoadingCompleted] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
@@ -38,6 +48,9 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
   const [activeSubTab, setActiveSubTab] = useState(null)
   const [exitingSubTabPanel, setExitingSubTabPanel] = useState(null)
   const [copiedActionId, setCopiedActionId] = useState(null)
+  const [assignmentOverrides, setAssignmentOverrides] = useState({})
+  const [assignmentViewIncidentId, setAssignmentViewIncidentId] = useState(null)
+  const [assignmentSelectedId, setAssignmentSelectedId] = useState(null)
   const activeActionsRef = useRef([])
   const copiedActionIdRef = useRef(null)
   const inputRef = useRef(null)
@@ -45,6 +58,8 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
   const subTabExitTimerRef = useRef(null)
   const loadingDelayTimerRef = useRef(null)
   const loadingTimerRef = useRef(null)
+  const pendingPlainShortcutRef = useRef(null)
+  const suppressSelectionResetRef = useRef(false)
   const suppressNextInputRef = useRef(false)
   const shouldReduceMotion = useReducedMotion()
   const shouldAnimate = motionEnabled && !shouldReduceMotion
@@ -69,8 +84,13 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
     return SMARTBAR_ITEMS
   }, [activeTab, query])
 
-  const visibleSections = useMemo(() => {
+  const rawVisibleSections = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
+
+    if (activeTab === 'All' && normalizedQuery) {
+      return getAllSearchSections(normalizedQuery)
+    }
+
     const sourceSections = activeTab === 'All' && !normalizedQuery
       ? ALL_COMMAND_SECTIONS
       : COMMAND_SECTIONS
@@ -87,21 +107,61 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
             return true
           }
 
-          const searchableText = [item.label, item.meta, item.email, ...item.keywords]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-
-          return searchableText.includes(normalizedQuery)
+          return matchesCommandQuery(item, normalizedQuery)
         }),
       }))
       .filter((section) => section.items.length > 0)
   }, [activeSubTab, activeTab, query])
 
+  const visibleSections = useMemo(
+    () => rawVisibleSections.map((section) => ({
+      ...section,
+      items: section.items.map((item) => getDecoratedItem(item, assignmentOverrides)),
+    })),
+    [assignmentOverrides, rawVisibleSections],
+  )
+
   const visibleItems = useMemo(
     () => visibleSections.flatMap((section) => section.items),
     [visibleSections],
   )
+  const assignableMembers = useMemo(
+    () => ASSIGNABLE_MEMBER_SECTIONS.flatMap((section) => section.items),
+    [],
+  )
+  const assignmentMemberSections = useMemo(
+    () => {
+      const normalizedQuery = query.trim().toLowerCase()
+
+      return ASSIGNABLE_MEMBER_SECTIONS
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) => matchesAssignmentMemberQuery(item, normalizedQuery)),
+        }))
+        .filter((section) => section.items.length > 0)
+    },
+    [query],
+  )
+  const assignmentVisibleMembers = useMemo(
+    () => assignmentMemberSections.flatMap((section) => section.items),
+    [assignmentMemberSections],
+  )
+  const selectedAssignmentMember = useMemo(
+    () => assignmentVisibleMembers.find((item) => item.id === assignmentSelectedId) || null,
+    [assignmentSelectedId, assignmentVisibleMembers],
+  )
+  const assignmentIncident = useMemo(
+    () => {
+      if (!assignmentViewIncidentId) {
+        return null
+      }
+
+      const incident = COMMAND_ITEMS.find((item) => item.id === assignmentViewIncidentId)
+      return incident ? getDecoratedItem(incident, assignmentOverrides) : null
+    },
+    [assignmentOverrides, assignmentViewIncidentId],
+  )
+  const isAssignmentView = Boolean(assignmentIncident)
   const hasSearchResults = !isFiltering || visibleItems.length > 0
   const shouldQueueSearchLoading = isFiltering && loadingMotion.enabled && !hasSearchResults
   const shouldShowSearchLoading = shouldQueueSearchLoading && isSearchLoading
@@ -120,39 +180,64 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
     },
     [shouldShowSearchLoading, visibleItems, visibleSmartbarItems],
   )
+  const selectableSections = useMemo(
+    () => {
+      if (shouldShowSearchLoading) {
+        return []
+      }
+
+      return [
+        ...(visibleSmartbarItems.length > 0
+          ? [{ id: 'smartbar', items: visibleSmartbarItems.map((item) => ({ ...item, type: 'smartbar' })) }]
+          : []),
+        ...visibleSections.map((section) => ({
+          id: section.id,
+          items: section.items.map((item) => ({ ...item, type: 'row' })),
+        })),
+      ].filter((section) => section.items.length > 0)
+    },
+    [shouldShowSearchLoading, visibleSections, visibleSmartbarItems],
+  )
 
   const selectedItem = useMemo(
     () => selectableItems.find((item) => item.id === selectedId) || null,
     [selectableItems, selectedId],
   )
 
-  const activeItem = useMemo(
-    () => selectedItem || getFirstCopyableItem(selectableItems),
-    [selectableItems, selectedItem],
-  )
-
   const activeActions = useMemo(
-    () => getActionsForItem(activeItem),
-    [activeItem],
+    () => {
+      if (isAssignmentView) {
+        return [{ id: 'assign-member', label: 'Assign', keys: ['Enter'], primary: true }]
+      }
+
+      return selectedItem ? getActionsForItem(selectedItem) : []
+    },
+    [isAssignmentView, selectedItem],
   )
 
   useEffect(() => {
     if (!open) {
+      clearPendingPlainShortcut()
       setQuery('')
       setHasSearchLoadingCompleted(false)
       setIsSearchLoading(false)
       setSelectedId(null)
       setSelectionMode('mouse')
       setExitingSubTabPanel(null)
+      setAssignmentViewIncidentId(null)
+      setAssignmentSelectedId(null)
       return
     }
 
     setQuery('')
+    clearPendingPlainShortcut()
     setHasSearchLoadingCompleted(false)
     setIsSearchLoading(false)
     setSelectedId(null)
     setSelectionMode('mouse')
     setExitingSubTabPanel(null)
+    setAssignmentViewIncidentId(null)
+    setAssignmentSelectedId(null)
 
     const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 40)
     return () => window.clearTimeout(focusTimer)
@@ -163,6 +248,8 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
       if (subTabExitTimerRef.current) {
         window.clearTimeout(subTabExitTimerRef.current)
       }
+
+      clearPendingPlainShortcut()
     }
   }, [])
 
@@ -220,6 +307,11 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
   ])
 
   useEffect(() => {
+    if (suppressSelectionResetRef.current) {
+      suppressSelectionResetRef.current = false
+      return
+    }
+
     setSelectedId(null)
     setSelectionMode('mouse')
   }, [activeSubTab, activeTab, query])
@@ -227,6 +319,27 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
   useEffect(() => {
     setCopiedActionId(null)
   }, [selectedId])
+
+  useEffect(() => {
+    if (!assignmentSelectedId) {
+      return
+    }
+
+    const selectedElement = resultsBodyRef.current?.querySelector('[aria-selected="true"]')
+    selectedElement?.scrollIntoView({ block: 'nearest' })
+  }, [assignmentSelectedId])
+
+  useEffect(() => {
+    if (!isAssignmentView) {
+      return
+    }
+
+    if (assignmentVisibleMembers.some((item) => item.id === assignmentSelectedId)) {
+      return
+    }
+
+    setAssignmentSelectedId(assignmentVisibleMembers[0]?.id || null)
+  }, [assignmentSelectedId, assignmentVisibleMembers, isAssignmentView])
 
   useEffect(() => {
     if (!selectedId) {
@@ -302,8 +415,115 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
   }, [open, query])
 
   function handleAction(action) {
+    if (action.id === 'assign' && selectedItem?.kind === 'incident') {
+      openAssignmentView(selectedItem)
+      return
+    }
+
+    if (action.id === 'assign-member') {
+      assignSelectedMember()
+      return
+    }
+
     if (action.copyValue) {
       triggerCopyAction(action)
+    }
+  }
+
+  function openAssignmentView(incident) {
+    clearPendingPlainShortcut()
+    suppressSelectionResetRef.current = true
+    setQuery('')
+    queueSubTabExit('Incidents')
+    setActiveTab('Incidents')
+    setActiveSubTab(incident.incidentState === 'ongoing' ? 'Ongoing' : 'Resolved')
+    setSelectedId(incident.id)
+    setSelectionMode('keyboard')
+    setAssignmentViewIncidentId(incident.id)
+    setAssignmentSelectedId(getInitialAssignmentMemberId(incident, assignableMembers))
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  function closeAssignmentView() {
+    if (!assignmentIncident) {
+      return
+    }
+
+    setAssignmentViewIncidentId(null)
+    setAssignmentSelectedId(null)
+    setSelectedId(assignmentIncident.id)
+    setSelectionMode('keyboard')
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  function assignSelectedMember(member = selectedAssignmentMember) {
+    if (!assignmentIncident || !member) {
+      return
+    }
+
+    setAssignmentOverrides((currentAssignments) => ({
+      ...currentAssignments,
+      [assignmentIncident.id]: member.avatar,
+    }))
+    setAssignmentViewIncidentId(null)
+    setAssignmentSelectedId(null)
+    setSelectedId(assignmentIncident.id)
+    setSelectionMode('keyboard')
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  function clearPendingPlainShortcut() {
+    if (pendingPlainShortcutRef.current?.timer) {
+      window.clearTimeout(pendingPlainShortcutRef.current.timer)
+    }
+
+    pendingPlainShortcutRef.current = null
+  }
+
+  function commitPendingShortcutToSearch(nextKey = '') {
+    const pendingShortcut = pendingPlainShortcutRef.current
+
+    if (!pendingShortcut) {
+      return false
+    }
+
+    clearPendingPlainShortcut()
+
+    const input = inputRef.current
+    const value = input?.value ?? query
+    const selectionStart = input?.selectionStart ?? value.length
+    const selectionEnd = input?.selectionEnd ?? selectionStart
+    const insertedText = `${pendingShortcut.key}${nextKey}`
+    const nextValue = `${value.slice(0, selectionStart)}${insertedText}${value.slice(selectionEnd)}`
+    const nextCaretPosition = selectionStart + insertedText.length
+
+    setQuery(nextValue)
+
+    window.requestAnimationFrame(() => {
+      inputRef.current?.setSelectionRange(nextCaretPosition, nextCaretPosition)
+    })
+
+    return true
+  }
+
+  function queuePlainShortcut(event, action) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    clearPendingPlainShortcut()
+
+    const shortcutKey = event.key
+    pendingPlainShortcutRef.current = {
+      action,
+      key: shortcutKey,
+      timer: window.setTimeout(() => {
+        const pendingShortcut = pendingPlainShortcutRef.current
+        pendingPlainShortcutRef.current = null
+
+        if (pendingShortcut) {
+          handleAction(pendingShortcut.action)
+        }
+      }, PLAIN_SHORTCUT_DELAY),
     }
   }
 
@@ -323,6 +543,24 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
   function selectWithKeyboard(getNextId) {
     setSelectionMode('keyboard')
     setSelectedId(getNextId)
+  }
+
+  function selectSectionWithKeyboard(direction) {
+    if (selectableSections.length === 0) {
+      return
+    }
+
+    setSelectionMode('keyboard')
+    setSelectedId((currentId) => {
+      const currentSectionIndex = selectableSections.findIndex((section) => (
+        section.items.some((item) => item.id === currentId)
+      ))
+      const nextSectionIndex = currentSectionIndex === -1
+        ? direction > 0 ? 0 : selectableSections.length - 1
+        : (currentSectionIndex + direction + selectableSections.length) % selectableSections.length
+
+      return selectableSections[nextSectionIndex]?.items[0]?.id || currentId
+    })
   }
 
   function handleTabChange(tab) {
@@ -395,6 +633,65 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
   }
 
   function handleKeyDown(event) {
+    const isSearchTextEntry = event.target === inputRef.current && isPrintableKey(event)
+    const plainShortcutAction = getPlainShortcutAction(event, activeActions)
+    const shouldUsePlainShortcut = Boolean(
+      plainShortcutAction &&
+      selectedItem &&
+      selectionMode === 'keyboard',
+    )
+
+    if (isSearchTextEntry && !event.metaKey && !event.ctrlKey && !event.altKey && !shouldUsePlainShortcut) {
+      clearPendingPlainShortcut()
+      return
+    }
+
+    const pendingPlainShortcut = pendingPlainShortcutRef.current
+
+    if (pendingPlainShortcut) {
+      if (isPrintableKey(event) && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault()
+        event.stopPropagation()
+        commitPendingShortcutToSearch(event.key)
+        return
+      }
+
+      commitPendingShortcutToSearch()
+    }
+
+    if (isAssignmentView) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        clearPendingPlainShortcut()
+        if (query.trim()) {
+          setQuery('')
+          window.requestAnimationFrame(() => inputRef.current?.focus())
+          return
+        }
+
+        closeAssignmentView()
+        return
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        selectAssignmentMember(1)
+        return
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        selectAssignmentMember(-1)
+        return
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        assignSelectedMember()
+        return
+      }
+    }
+
     if (event.altKey) {
       const copyAction = getAltCopyShortcutAction(event, activeActions)
 
@@ -425,6 +722,16 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
 
     if (event.key === 'Escape') {
       event.preventDefault()
+      clearPendingPlainShortcut()
+      if (query.trim()) {
+        setQuery('')
+        resetToDefaultTab()
+        setSelectedId(null)
+        setSelectionMode('mouse')
+        window.requestAnimationFrame(() => inputRef.current?.focus())
+        return
+      }
+
       if (activeTab === DEFAULT_TAB && !activeSubTab) {
         onOpenChange(false)
       } else {
@@ -439,6 +746,12 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
 
     if (event.key === 'ArrowDown') {
       event.preventDefault()
+      clearPendingPlainShortcut()
+      if (event.altKey) {
+        selectSectionWithKeyboard(1)
+        return
+      }
+
       selectWithKeyboard((currentId) => {
         const currentIndex = getSelectedIndex(selectableItems, currentId)
         return selectableItems[(currentIndex + 1) % selectableItems.length].id
@@ -448,6 +761,12 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
 
     if (event.key === 'ArrowUp') {
       event.preventDefault()
+      clearPendingPlainShortcut()
+      if (event.altKey) {
+        selectSectionWithKeyboard(-1)
+        return
+      }
+
       selectWithKeyboard((currentId) => {
         const currentIndex = getSelectedIndex(selectableItems, currentId)
         return selectableItems[
@@ -459,22 +778,43 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
 
     if (event.key === 'ArrowRight') {
       event.preventDefault()
+      clearPendingPlainShortcut()
       moveTabSelection(1)
       return
     }
 
     if (event.key === 'ArrowLeft') {
       event.preventDefault()
+      clearPendingPlainShortcut()
       moveTabSelection(-1)
       return
     }
 
     if (event.key === 'Enter') {
       event.preventDefault()
+      clearPendingPlainShortcut()
       if (selectedItem?.type === 'smartbar') {
         activateItem(selectedItem)
       }
+      return
     }
+
+    if (plainShortcutAction) {
+      queuePlainShortcut(event, plainShortcutAction)
+    }
+  }
+
+  function selectAssignmentMember(direction) {
+    if (assignmentVisibleMembers.length === 0) {
+      return
+    }
+
+    setSelectionMode('keyboard')
+    setAssignmentSelectedId((currentId) => {
+      const currentIndex = getSelectedIndex(assignmentVisibleMembers, currentId)
+      const nextIndex = (currentIndex + direction + assignmentVisibleMembers.length) % assignmentVisibleMembers.length
+      return assignmentVisibleMembers[nextIndex]?.id || null
+    })
   }
 
   const palette = (
@@ -492,6 +832,9 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
         className="command-palette"
         aria-label="Command palette"
         onKeyDown={handleKeyDown}
+        data-dots={dotsMode}
+        data-icons-visibility={iconsVisibility}
+        data-info-visibility={infoVisibility}
         data-motion={shouldAnimate}
         data-selection-mode={selectionMode}
       >
@@ -514,16 +857,34 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
           </span>
         </label>
 
-        <div className="command-results" role="listbox" aria-label="Command results">
-          <CommandTabs
-            activeSubTab={activeSubTab}
-            activeTab={activeTab}
-            exitingSubTabPanel={exitingSubTabPanel}
-            motionEnabled={shouldAnimate}
-            onSubTabChange={handleSubTabChange}
-            onTabChange={handleTabChange}
-          />
-          {shouldAnimate ? (
+        <div
+          className="command-results"
+          data-mode={isAssignmentView ? 'assignment' : 'results'}
+          role="listbox"
+          aria-label={isAssignmentView ? 'Assign incident' : 'Command results'}
+        >
+          {isAssignmentView ? (
+            <div className="command-results-body command-assignment-body" ref={resultsBodyRef}>
+              <CommandAssignmentView
+                incident={assignmentIncident}
+                memberSections={assignmentMemberSections}
+                motionEnabled={shouldAnimate}
+                selectedId={assignmentSelectedId}
+                onAssign={assignSelectedMember}
+                onSelect={setAssignmentSelectedId}
+              />
+            </div>
+          ) : (
+            <>
+              <CommandTabs
+                activeSubTab={activeSubTab}
+                activeTab={activeTab}
+                exitingSubTabPanel={exitingSubTabPanel}
+                motionEnabled={shouldAnimate}
+                onSubTabChange={handleSubTabChange}
+                onTabChange={handleTabChange}
+              />
+              {shouldAnimate ? (
             <AnimatePresence mode="wait">
               <motion.div
                 className="command-results-body"
@@ -546,7 +907,7 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
                   holdEmptyState={shouldHoldEmptyState}
                   searchLoading={shouldShowSearchLoading}
                   loadingMotion={loadingMotion}
-                  loadingMotionEnabled={!shouldReduceMotion}
+                  loadingMotionEnabled={shouldAnimate}
                   loadingKey={query.trim() || DEFAULT_LOADING_QUERY_KEY}
                   visibleItems={visibleItems}
                   visibleSections={visibleSections}
@@ -556,23 +917,25 @@ function CommandPalette({ open, motionEnabled, onOpenChange }) {
                 />
               </motion.div>
             </AnimatePresence>
-          ) : (
-            <div className="command-results-body" ref={resultsBodyRef}>
-              <CommandResultsContent
-                motionEnabled={false}
-                selectedId={selectedId}
-                holdEmptyState={shouldHoldEmptyState}
-                searchLoading={shouldShowSearchLoading}
-                loadingMotion={loadingMotion}
-                loadingMotionEnabled={!shouldReduceMotion}
-                loadingKey={query.trim() || DEFAULT_LOADING_QUERY_KEY}
-                visibleItems={visibleItems}
-                visibleSections={visibleSections}
-                visibleSmartbarItems={visibleSmartbarItems}
-                onActivate={activateItem}
-                onSelect={selectWithMouse}
-              />
-            </div>
+              ) : (
+                <div className="command-results-body" ref={resultsBodyRef}>
+                  <CommandResultsContent
+                    motionEnabled={false}
+                    selectedId={selectedId}
+                    holdEmptyState={shouldHoldEmptyState}
+                    searchLoading={shouldShowSearchLoading}
+                    loadingMotion={loadingMotion}
+                    loadingMotionEnabled={false}
+                    loadingKey={query.trim() || DEFAULT_LOADING_QUERY_KEY}
+                    visibleItems={visibleItems}
+                    visibleSections={visibleSections}
+                    visibleSmartbarItems={visibleSmartbarItems}
+                    onActivate={activateItem}
+                    onSelect={selectWithMouse}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
         <CommandActionBar
@@ -668,6 +1031,7 @@ function CommandResultsContent({
 }
 
 function CommandLoadingRows({ motionEnabled, settings }) {
+  const [staticPhase, setStaticPhase] = useState(false)
   const rowCount = Math.round(settings.rowCount)
   const activeSeconds = msToSeconds(settings.rowActiveMs)
   const staggerSeconds = msToSeconds(settings.rowStaggerMs)
@@ -675,6 +1039,19 @@ function CommandLoadingRows({ motionEnabled, settings }) {
   const cycleSeconds = Math.max(phaseSeconds * 2, 0.1)
   const idleColor = settings.idleColor
   const fillColor = settings.fillColor
+
+  useEffect(() => {
+    if (motionEnabled) {
+      setStaticPhase(false)
+      return undefined
+    }
+
+    const phaseTimer = window.setInterval(() => {
+      setStaticPhase((currentPhase) => !currentPhase)
+    }, 300)
+
+    return () => window.clearInterval(phaseTimer)
+  }, [motionEnabled])
 
   return (
     <div
@@ -710,7 +1087,7 @@ function CommandLoadingRows({ motionEnabled, settings }) {
           return (
             <div
               className="command-loading-row"
-              data-active={index === 0}
+              data-active={(index % 2 === 0) === staticPhase}
               key={index}
               role="presentation"
               style={rowStyle}
@@ -954,9 +1331,59 @@ function CommandSections({ motionEnabled, sections, selectedId, onSelect }) {
   ))
 }
 
-function CommandRow({ item, motionEnabled, selected, onSelect }) {
+function CommandAssignmentView({
+  incident,
+  memberSections,
+  motionEnabled,
+  selectedId,
+  onAssign,
+  onSelect,
+}) {
+  return (
+    <>
+      <section className="command-section command-assignment-incident">
+        <div className="command-section-heading">
+          <span>Assign Incident</span>
+        </div>
+        <CommandRow
+          item={incident}
+          motionEnabled={motionEnabled}
+          selected={false}
+          onSelect={() => {}}
+        />
+      </section>
+      <section className="command-section">
+        <div className="command-section-heading">
+          <span>Assign to...</span>
+        </div>
+        {memberSections.length === 0 ? (
+          <div className="command-empty command-assignment-empty">No members</div>
+        ) : (
+          memberSections.map((section) => (
+            <React.Fragment key={section.id}>
+              {section.items.map((item) => (
+                <CommandRow
+                  key={item.id}
+                  item={item}
+                  motionEnabled={motionEnabled}
+                  selected={item.id === selectedId}
+                  onSelect={() => onSelect(item.id)}
+                  onClick={() => onAssign(item)}
+                />
+              ))}
+            </React.Fragment>
+          ))
+        )}
+      </section>
+    </>
+  )
+}
+
+function CommandRow({ item, motionEnabled, selected, onClick, onSelect }) {
+  const isIncident = item.kind === 'incident'
   const isMember = item.kind === 'member'
   const isAsset = item.kind === 'asset'
+  const isLog = item.kind === 'log'
 
   return (
     <button
@@ -969,6 +1396,7 @@ function CommandRow({ item, motionEnabled, selected, onSelect }) {
       data-motion={motionEnabled}
       data-row-kind={item.kind}
       onPointerMove={onSelect}
+      onClick={onClick}
     >
       <span className="command-row-main">
         {isMember ? (
@@ -980,7 +1408,13 @@ function CommandRow({ item, motionEnabled, selected, onSelect }) {
         )}
         <span className="command-copy">
           <span className="command-label">{item.label}</span>
-          {item.meta && (
+          {isIncident && item.incidentSeverity && (
+            <IncidentSeverityMark
+              severity={item.incidentSeverity}
+              state={item.incidentState}
+            />
+          )}
+          {item.meta && !isIncident && !isLog && (
             <span
               className="command-meta"
               data-state={item.meta.toLowerCase().replace(/\s+/g, '-')}
@@ -995,15 +1429,71 @@ function CommandRow({ item, motionEnabled, selected, onSelect }) {
       )}
       {isAsset && item.ownerAvatar && (
         <span className="command-row-accessory">
-          <AvatarBadge initials={item.ownerAvatar} state={item.ownerState} />
+          <AvatarBadge
+            initials={item.ownerAvatar}
+            label={item.ownerName}
+            state={item.ownerState}
+          />
+        </span>
+      )}
+      {isIncident && item.assigneeAvatar && (
+        <span className="command-row-accessory">
+          <AvatarBadge
+            initials={item.assigneeAvatar}
+            label={item.assigneeName}
+            state={item.assigneeState}
+          />
+        </span>
+      )}
+      {isLog && item.meta && (
+        <span className="command-row-accessory command-log-timestamp">
+          {item.meta}
         </span>
       )}
     </button>
   )
 }
 
-function AvatarBadge({ initials, state }) {
-  return <span className="command-avatar-badge" data-state={state}>{initials}</span>
+function IncidentSeverityMark({ severity, state }) {
+  const triangleCount = {
+    high: 3,
+    medium: 2,
+    low: 1,
+  }[severity] || 3
+  const width = triangleCount === 3 ? 32 : triangleCount === 2 ? 22 : 12
+  const label = `${severity} severity`
+
+  return (
+    <span
+      className="command-incident-severity"
+      data-incident-state={state}
+      role="img"
+      aria-label={label}
+    >
+      <svg aria-hidden="true" viewBox={`0 0 ${width} 12`}>
+        {Array.from({ length: triangleCount }).map((_, index) => (
+          <path
+            key={index}
+            d={`M${1.76953 + index * 10} 11.0002H${10.2331 + index * 10}L${6.00131 + index * 10} 3.53662L${1.76953 + index * 10} 11.0002Z`}
+            fill="currentColor"
+          />
+        ))}
+      </svg>
+    </span>
+  )
+}
+
+function AvatarBadge({ initials, label, state }) {
+  return (
+    <span
+      className="command-avatar-badge"
+      aria-label={label || initials}
+      data-state={state}
+      data-tooltip={label || initials}
+    >
+      {initials}
+    </span>
+  )
 }
 
 function CommandActionBar({ actions, copiedActionId, motionEnabled, onAction }) {
@@ -1050,8 +1540,13 @@ function CommandIcon({ name, size = 'default' }) {
   const className = size === 'large' ? 'command-status-icon' : 'command-row-icon'
   const CentralIcon = {
     book: IconNewspaper2,
+    cloud: IconCloud,
+    exclamationCircle: IconExclamationCircle,
+    key: IconKey1,
     laptop: IconMacbook,
     person: IconPeople,
+    phoneDynamicIsland: IconPhoneDynamicIsland,
+    plugin: IconPlugin1,
     server: IconServer,
     tasks: IconTasks,
   }[name]
@@ -1154,6 +1649,58 @@ function matchesActiveFilter(item, activeTab, activeSubTab) {
   return item.subTab === activeSubTab
 }
 
+function getAllSearchSections(normalizedQuery) {
+  const itemsByTab = new Map(
+    COMMAND_TABS
+      .filter((tab) => tab !== DEFAULT_TAB)
+      .map((tab) => [tab, []]),
+  )
+
+  COMMAND_SECTIONS.forEach((section) => {
+    section.items.forEach((item) => {
+      if (!itemsByTab.has(item.tab) || !matchesCommandQuery(item, normalizedQuery)) {
+        return
+      }
+
+      itemsByTab.get(item.tab).push(item)
+    })
+  })
+
+  return Array.from(itemsByTab.entries())
+    .map(([tab, items]) => ({
+      id: `all-search-${tab.toLowerCase()}`,
+      label: tab,
+      items: dedupeItems(items),
+    }))
+    .filter((section) => section.items.length > 0)
+}
+
+function matchesCommandQuery(item, normalizedQuery) {
+  if (!normalizedQuery) {
+    return true
+  }
+
+  const searchableText = [item.label, item.meta, item.email, ...item.keywords]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return searchableText.includes(normalizedQuery)
+}
+
+function dedupeItems(items) {
+  const seenIds = new Set()
+
+  return items.filter((item) => {
+    if (seenIds.has(item.id)) {
+      return false
+    }
+
+    seenIds.add(item.id)
+    return true
+  })
+}
+
 function msToSeconds(value) {
   return Math.max(Number(value) || 0, 0) / 1000
 }
@@ -1205,8 +1752,43 @@ function getActionsForItem(item) {
   return item.actions
 }
 
-function getFirstCopyableItem(items) {
-  return items.find((item) => item.actions?.some((action) => action.copyValue)) || null
+function getDecoratedItem(item, assignmentOverrides) {
+  if (item.kind !== 'incident') {
+    return item
+  }
+
+  const hasOverride = Object.prototype.hasOwnProperty.call(assignmentOverrides, item.id)
+  const assigneeAvatar = hasOverride ? assignmentOverrides[item.id] : item.assigneeAvatar
+
+  return {
+    ...item,
+    assigneeAvatar,
+    assigneeName: assigneeAvatar ? OWNER_NAME_BY_AVATAR[assigneeAvatar] : null,
+    assigneeState: assigneeAvatar ? OWNER_STATE_BY_AVATAR[assigneeAvatar] : null,
+    actions: item.actions.map((action) => (
+      action.id === 'assign'
+        ? { ...action, label: assigneeAvatar ? 'Reassign' : 'Assign' }
+        : action
+    )),
+  }
+}
+
+function getInitialAssignmentMemberId(incident, members) {
+  const currentAssignee = members.find((member) => member.avatar === incident.assigneeAvatar)
+  return currentAssignee?.id || members[0]?.id || null
+}
+
+function matchesAssignmentMemberQuery(item, normalizedQuery) {
+  if (!normalizedQuery) {
+    return true
+  }
+
+  const searchableText = [item.label, item.meta, item.email, item.avatar, ...item.keywords]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return searchableText.includes(normalizedQuery)
 }
 
 function formatKey(key) {
@@ -1237,12 +1819,32 @@ function getAltCopyShortcutAction(event, actions) {
   return actions.find((action) => action.copyValue)
 }
 
+function getPlainShortcutAction(event, actions) {
+  if (
+    event.altKey ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.key.toLowerCase() !== 'a'
+  ) {
+    return null
+  }
+
+  return actions.find((action) => (
+    action.id === 'assign' &&
+    action.keys.some((key) => key.toLowerCase() === 'a')
+  ))
+}
+
 function isAltCopyShortcut(event) {
   if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) {
     return false
   }
 
   return event.key.toLowerCase() === 'c' || event.code === 'KeyC'
+}
+
+function isPrintableKey(event) {
+  return event.key.length === 1
 }
 
 async function copyActionValue(value) {
