@@ -39,7 +39,7 @@ const SUB_TAB_EXIT_DELAY = 190
 const PLAIN_SHORTCUT_DELAY = 300
 const ALT_HINT_DELAY = 1000
 
-function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motionEnabled, onOpenChange }) {
+function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motionEnabled, tabsTone, onOpenChange }) {
   const [query, setQuery] = useState('')
   const [hasSearchLoadingCompleted, setHasSearchLoadingCompleted] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
@@ -464,9 +464,9 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
     }
   }, [open, query])
 
-  function handleAction(action) {
-    if (action.id === 'assign' && selectedItem?.kind === 'incident') {
-      openAssignmentView(selectedItem)
+  function handleAction(action, sourceItem = selectedItem) {
+    if (action.id === 'assign' && sourceItem?.kind === 'incident') {
+      openAssignmentView(sourceItem)
       return
     }
 
@@ -537,51 +537,53 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
     }
   }
 
-  function commitPendingShortcutToSearch(nextKey = '') {
-    const pendingShortcut = pendingPlainShortcutRef.current
-
-    if (!pendingShortcut) {
-      return false
-    }
-
+  function queuePlainShortcut(event, action) {
     clearPendingPlainShortcut()
 
     const input = inputRef.current
-    const value = input?.value ?? query
-    const selectionStart = input?.selectionStart ?? value.length
+    const valueBefore = input?.value ?? query
+    const selectionStart = input?.selectionStart ?? valueBefore.length
     const selectionEnd = input?.selectionEnd ?? selectionStart
-    const insertedText = `${pendingShortcut.key}${nextKey}`
-    const nextValue = `${value.slice(0, selectionStart)}${insertedText}${value.slice(selectionEnd)}`
-    const nextCaretPosition = selectionStart + insertedText.length
-
-    setQuery(nextValue)
-
-    window.requestAnimationFrame(() => {
-      inputRef.current?.setSelectionRange(nextCaretPosition, nextCaretPosition)
-    })
-
-    return true
-  }
-
-  function queuePlainShortcut(event, action) {
-    event.preventDefault()
-    event.stopPropagation()
-
-    clearPendingPlainShortcut()
-
     const shortcutKey = event.key
+    const sourceItem = selectedItem
+
     pendingPlainShortcutRef.current = {
       action,
       key: shortcutKey,
+      selectionEnd,
+      selectionStart,
+      sourceItem,
+      valueBefore,
       timer: window.setTimeout(() => {
         const pendingShortcut = pendingPlainShortcutRef.current
         pendingPlainShortcutRef.current = null
 
         if (pendingShortcut) {
-          handleAction(pendingShortcut.action)
+          removePendingShortcutFromSearch(pendingShortcut)
+          handleAction(pendingShortcut.action, pendingShortcut.sourceItem)
         }
       }, PLAIN_SHORTCUT_DELAY),
     }
+  }
+
+  function removePendingShortcutFromSearch(pendingShortcut) {
+    const input = inputRef.current
+    const currentValue = input?.value ?? query
+    const insertedValue = `${pendingShortcut.valueBefore.slice(0, pendingShortcut.selectionStart)}${pendingShortcut.key}${pendingShortcut.valueBefore.slice(pendingShortcut.selectionEnd)}`
+
+    if (currentValue !== insertedValue) {
+      return
+    }
+
+    const nextValue = pendingShortcut.valueBefore
+    const nextCaretPosition = pendingShortcut.selectionStart
+
+    if (input) {
+      input.value = nextValue
+      input.setSelectionRange(nextCaretPosition, nextCaretPosition)
+    }
+
+    setQuery(nextValue)
   }
 
   function triggerCopyAction(action) {
@@ -739,13 +741,11 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
 
     if (pendingPlainShortcut) {
       if (isPrintableKey(event) && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        event.preventDefault()
-        event.stopPropagation()
-        commitPendingShortcutToSearch(event.key)
+        clearPendingPlainShortcut()
         return
       }
 
-      commitPendingShortcutToSearch()
+      clearPendingPlainShortcut()
     }
 
     if (isAssignmentView) {
@@ -936,6 +936,7 @@ function CommandPalette({ dotsMode, iconsVisibility, infoVisibility, open, motio
         data-info-visibility={infoVisibility}
         data-motion={shouldAnimate}
         data-selection-mode={selectionMode}
+        data-tabs-tone={tabsTone}
       >
         <label className="command-search-row">
           <span className="command-search-text-frame">
@@ -1255,14 +1256,17 @@ function CommandTabs({
         const hasSubTabs = subTabs.length > 0
         const hasVisibleSubTabs = tab === activeTab && subTabs.length > 0
         const hasExitingSubTabs = motionEnabled && tab === exitingSubTabPanel && !hasVisibleSubTabs
+        const accentColor = getTabAccentColor(tab)
+        const tabStyle = { '--cmd-tab-accent': accentColor }
 
         if (hasSubTabs) {
           return (
-            <div className="command-tab-group" key={tab}>
+            <div className="command-tab-group" key={tab} style={tabStyle}>
               <button
                 className="command-tab command-tab-parent"
                 type="button"
                 data-active={tab === activeTab}
+                data-tab-accent={Boolean(accentColor)}
                 data-filtering={tab === activeTab && Boolean(activeSubTab)}
                 aria-pressed={tab === activeTab}
                 onClick={() => onTabChange(tab)}
@@ -1288,7 +1292,9 @@ function CommandTabs({
             className="command-tab"
             type="button"
             data-active={tab === activeTab}
+            data-tab-accent={Boolean(accentColor)}
             aria-pressed={tab === activeTab}
+            style={tabStyle}
             onClick={() => onTabChange(tab)}
           >
             {tab}
@@ -1870,6 +1876,15 @@ function getVisibleTabOptions(activeTab) {
 
     return options
   })
+}
+
+function getTabAccentColor(tab) {
+  return {
+    Incidents: '#EF4444',
+    Assets: '#22C55E',
+    Logs: '#8B5CF6',
+    Members: '#3B82F6',
+  }[tab] || null
 }
 
 function getSelectedIndex(items, selectedId) {

@@ -51,6 +51,7 @@ const DEFAULT_PROTOTYPE_CONTROLS = {
   selectionTone: 'mono',
   shadowEnabled: false,
   borderTone: 'grey',
+  tabsTone: 'mono',
   textScale: 'minus',
 }
 
@@ -69,6 +70,7 @@ const POLISHED_PROTOTYPE_CONTROLS = {
   selectionTone: 'mono',
   shadowEnabled: true,
   borderTone: 'grey',
+  tabsTone: 'mono',
   textScale: 'plus',
 }
 
@@ -87,6 +89,7 @@ const COMPACT_PROTOTYPE_CONTROLS = {
   selectionTone: 'blue',
   shadowEnabled: false,
   borderTone: 'black',
+  tabsTone: 'mono',
   textScale: 'minus',
 }
 
@@ -136,6 +139,7 @@ function App() {
   const [overlayBlurEnabled, setOverlayBlurEnabled] = useState(false)
   const [paletteWidth, setPaletteWidth] = useState('560px')
   const [selectionTone, setSelectionTone] = useState('mono')
+  const [tabsTone, setTabsTone] = useState('mono')
   const [textScale, setTextScale] = useState('minus')
   const [infoVisibility, setInfoVisibility] = useState('hover')
   const [devToolsVisible, setDevToolsVisible] = useState(false)
@@ -182,6 +186,7 @@ function App() {
       selectionTone,
       shadowEnabled,
       borderTone,
+      tabsTone,
       textScale,
     }),
     [
@@ -199,6 +204,7 @@ function App() {
       selectionTone,
       shadowEnabled,
       borderTone,
+      tabsTone,
       textScale,
     ],
   )
@@ -240,6 +246,7 @@ function App() {
     setSelectionTone(preset.controls.selectionTone)
     setShadowEnabled(preset.controls.shadowEnabled)
     setBorderTone(preset.controls.borderTone ?? 'grey')
+    setTabsTone(preset.controls.tabsTone ?? 'mono')
     setTextScale(preset.controls.textScale)
     setActivePresetId(preset.id)
 
@@ -349,6 +356,7 @@ function App() {
         infoVisibility={infoVisibility}
         open={isCommandPaletteOpen}
         motionEnabled={motionEnabled && !isApplyingPreset}
+        tabsTone={tabsTone}
         onOpenChange={setIsCommandPaletteOpen}
       />
 
@@ -368,6 +376,7 @@ function App() {
           selectionTone={selectionTone}
           shadowEnabled={shadowEnabled}
           borderTone={borderTone}
+          tabsTone={tabsTone}
           textScale={textScale}
           onIconSizeChange={setIconSize}
           onIconStrokeChange={setIconStroke}
@@ -383,6 +392,7 @@ function App() {
           onSelectionToneChange={setSelectionTone}
           onShadowChange={setShadowEnabled}
           onBorderToneChange={setBorderTone}
+          onTabsToneChange={setTabsTone}
           onTextScaleChange={setTextScale}
         />
       )}
@@ -504,6 +514,7 @@ function SettingsPane({
   selectionTone,
   shadowEnabled,
   borderTone,
+  tabsTone,
   textScale,
   onIconSizeChange,
   onIconStrokeChange,
@@ -519,6 +530,7 @@ function SettingsPane({
   onSelectionToneChange,
   onShadowChange,
   onBorderToneChange,
+  onTabsToneChange,
   onTextScaleChange,
 }) {
   return (
@@ -562,6 +574,27 @@ function SettingsPane({
             onClick={() => onShadowChange(true)}
           >
             On
+          </button>
+        </div>
+      </div>
+      <div className="settings-row">
+        <span className="settings-label">Tabs</span>
+        <div className="settings-toggle" role="group" aria-label="Tab color">
+          <button
+            type="button"
+            className="settings-option"
+            data-active={tabsTone === 'color'}
+            onClick={() => onTabsToneChange('color')}
+          >
+            Color
+          </button>
+          <button
+            type="button"
+            className="settings-option"
+            data-active={tabsTone === 'mono'}
+            onClick={() => onTabsToneChange('mono')}
+          >
+            Mono
           </button>
         </div>
       </div>
